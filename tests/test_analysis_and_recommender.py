@@ -83,8 +83,8 @@ def test_denominators_and_shares():
 
     # share_of_all = 3 / 5 * 100 = 60.0%
     assert login_prob["share_of_all_reviews"] == 60.0
-    # share_of_low = 2 / 3 * 100 = 66.67%
-    assert login_prob["share_of_low_star"] == 66.67
+    # share_of_low = 2 / 3 * 100 = 66.7% (1 decimal rounded per Step 1)
+    assert login_prob["share_of_low_star"] == 66.7
 
     num_res = compute_basic_numbers(df, meta)
     # avg text = (1+2+5+1+5)/5 = 2.8. gap = 2.8 - 4.6 = -1.8
@@ -114,39 +114,41 @@ def test_trend_small_sample_inconclusive():
 
 def test_safety_escalation_rule():
     """
-    Tests that only safety_complaints issue gets is_safety = True and the safety boost,
-    while technical categories (login_and_otp) do NOT get marked as safety escalation.
+    Tests that safety complaints are separated into the safety_escalation block,
+    while technical categories (login_and_otp) do NOT appear as safety escalation.
     """
     now = datetime.now(timezone.utc)
     data = [
         {"review_id": "r1", "score": 1, "issue": "login_and_otp", "is_classified": 1, "at": now.isoformat(), "safety_flag": 0},
-        {"review_id": "r2", "score": 1, "issue": "safety_complaints", "is_classified": 1, "at": now.isoformat(), "safety_flag": 1},
+        {"review_id": "r2", "score": 1, "issue": "safety_complaints", "is_classified": 1, "at": now.isoformat(), "safety_flag": 1, "evidence_quote": "SOS button blocked by pop ups", "responsibility": "app_technical"},
     ]
     df = pd.DataFrame(data)
     df["at_dt"] = pd.to_datetime(df["at"])
     res = analyze_problems(df)
 
-    login_prob = next(p for p in res["ranked_problems"] if p["issue_key"] == "login_and_otp")
-    safety_prob = next(p for p in res["ranked_problems"] if p["issue_key"] == "safety_complaints")
-
-    assert login_prob["is_safety"] is False
-    assert safety_prob["is_safety"] is True
-    assert safety_prob["ranking_score"] >= 100.0
+    assert "safety_escalation" in res
+    assert res["safety_escalation"]["low_star_count"] == 1
+    # Ranked problems should contain login_and_otp, while safety complaints is in escalation block
+    ranked_keys = [p["issue_key"] for p in res["ranked_problems"]]
+    assert "login_and_otp" in ranked_keys
+    assert "safety_complaints" not in ranked_keys
 
 def test_action_items_csv_export(tmp_path):
-    """Tests Jira/Linear CSV export structure."""
+    """Tests Jira/Linear CSV export structure matches MIS-001..MIS-009."""
     out_csv = tmp_path / "action_items.csv"
     mock_specs = [{
-        "issue_key": "login_and_otp",
-        "title": "Login And Otp",
-        "dominant_responsibility": "app_technical",
-        "estimated_effort": "small",
-        "owner": "Auth Lead",
-        "hypothesis": "SMS timeout",
-        "proposed_change": "Add WhatsApp OTP",
-        "first_14_days": "Deploy SMS retriever",
-        "acceptance_criteria": "Auto-read OTP",
-        "what_to_measure": "Login success rate"
+        "key": "MIS-001",
+        "title": "SOS reachable in one tap, no blocking pop-ups",
+        "component": "app_technical",
+        "effort": "Small",
+        "priority": "Highest",
+        "owner": "Android lead",
+        "affected_flow": "Active Trip screen",
+        "hypotheses": ["Dialog overlay blocks touch"],
+        "proposed_change": "Enforce top z-index for SOS",
+        "first_14_days": "Refactor window manager",
+        "acceptance_criteria": "SOS tap responsive in 500ms",
+        "what_to_measure": "Zero blocked SOS events"
     }]
     path = export_action_items_csv(mock_specs, out_csv)
     df_out = pd.read_csv(path)
@@ -154,4 +156,34 @@ def test_action_items_csv_export(tmp_path):
     assert "Issue Key" in df_out.columns
     assert "Summary" in df_out.columns
     assert "Acceptance Criteria" in df_out.columns
-    assert df_out.iloc[0]["Summary"] == "Fix Login And Otp (app_technical)"
+    assert df_out.iloc[0]["Issue Key"] == "MIS-001"
+    assert "SOS reachable" in df_out.iloc[0]["Summary"]
+
+def test_key_numbers_consistency_in_deliverables():
+    """
+    Step 7 verification test: Checks that key numbers across the database,
+    weekly digest, and results structures match identically.
+    """
+    from src.analysis import load_reviews_df, load_latest_listing_metrics, compute_basic_numbers
+    from src.recommender import analyze_problems
+    from config.config import REPORTS_DIR
+
+    df = load_reviews_df()
+    meta = load_latest_listing_metrics()
+    b = compute_basic_numbers(df, meta)
+    r = analyze_problems(df)
+
+    # 1. Total review count check
+    assert b["summary"]["total_reviews"] == 1530
+    assert b["summary"]["ratings_count"] == 114879
+    assert b["summary"]["listing_score"] == 4.64
+    assert b["summary"]["avg_text_rating"] == 3.82
+
+    # 2. Check weekly digest content matches results
+    digest_path = REPORTS_DIR / "weekly_digest.md"
+    assert digest_path.exists()
+    digest_text = digest_path.read_text(encoding="utf-8")
+    assert "4.64★ (114,879 lifetime ratings)" in digest_text
+    assert "Recent Text Review Average:** 3.82★" in digest_text
+    assert "Latest 30d vs Previous 30d:** 3.77★ vs 3.82★" in digest_text
+    assert "Low-Star Reviews (1–2★) in Latest 30d:** 73 (29.9%)" in digest_text

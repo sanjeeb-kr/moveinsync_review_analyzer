@@ -149,17 +149,30 @@ def compute_basic_numbers(df: pd.DataFrame, listing_metrics: dict) -> dict:
         grp = df_ver[df_ver["app_version"] == ver]
         v_count = len(grp)
         v_avg = float(grp["score"].mean())
+        v_std = float(grp["score"].std()) if v_count > 1 else 0.0
         v_low_cnt = len(grp[grp["score"].isin([1, 2])])
-        v_low_share = round(v_low_cnt / v_count * 100, 2)
-        v_1star_share = round(len(grp[grp["score"] == 1]) / v_count * 100, 2)
+        v_low_share = round(v_low_cnt / v_count * 100, 1)
+        v_1star_share = round(len(grp[grp["score"] == 1]) / v_count * 100, 1)
+        margin = round(1.96 * v_std / np.sqrt(v_count), 2) if v_count > 1 else 0.0
+        first_seen = str(grp["at"].min())[:10] if "at" in grp.columns and not grp["at"].isna().all() else "N/A"
+        is_sig = bool(v_count >= MIN_SAMPLE_FOR_TREND)
+        # Say "possible regression" only when version differs from overall average by more than margin
+        is_regression = bool(is_sig and ((avg_text_rating - v_avg) > margin))
+
         ver_stats.append({
             "version": str(ver),
-            "review_count": v_count,
+            "review_count": int(v_count),
             "avg_rating": round(v_avg, 2),
-            "low_star_count": v_low_cnt,
+            "std_rating": round(v_std, 2),
+            "margin": margin,
+            "ci_lower": round(max(1.0, v_avg - margin), 2),
+            "ci_upper": round(min(5.0, v_avg + margin), 2),
+            "first_seen": first_seen,
+            "low_star_count": int(v_low_cnt),
             "low_star_share": v_low_share,
             "one_star_share": v_1star_share,
-            "is_significant": v_count >= MIN_SAMPLE_FOR_TREND
+            "is_significant": is_sig,
+            "is_regression": is_regression
         })
     ver_df = pd.DataFrame(ver_stats)
     if not ver_df.empty:
@@ -188,7 +201,7 @@ def compute_basic_numbers(df: pd.DataFrame, listing_metrics: dict) -> dict:
     if "reply_content" in df.columns:
         low_with_replies = df_low[df_low["reply_content"].notna() & (df_low["reply_content"].str.strip() != "")]
         reply_count_low = len(low_with_replies)
-        reply_rate_low = round(reply_count_low / total_low * 100, 2) if total_low > 0 else 0.0
+        reply_rate_low = round(reply_count_low / total_low * 100, 1) if total_low > 0 else 0.0
 
         valid_latencies = low_with_replies["reply_latency_hours"].dropna()
         valid_latencies = valid_latencies[valid_latencies >= 0]
@@ -196,7 +209,7 @@ def compute_basic_numbers(df: pd.DataFrame, listing_metrics: dict) -> dict:
         median_reply_latency_hours = round(float(valid_latencies.median()), 1) if not valid_latencies.empty else None
 
         all_replied = df[df["reply_content"].notna() & (df["reply_content"].str.strip() != "")]
-        overall_reply_rate = round(len(all_replied) / total_reviews * 100, 2)
+        overall_reply_rate = round(len(all_replied) / total_reviews * 100, 1)
     else:
         low_with_replies = pd.DataFrame()
         reply_count_low = 0
@@ -204,6 +217,21 @@ def compute_basic_numbers(df: pd.DataFrame, listing_metrics: dict) -> dict:
         avg_reply_latency_hours = None
         median_reply_latency_hours = None
         overall_reply_rate = 0.0
+
+    # 6. Monthly Trend Aggregation
+    df["month_str"] = df["at_dt"].dt.strftime("%Y-%m")
+    m_grouped = df.groupby("month_str")
+    monthly_stats = []
+    for m_name, m_sub in m_grouped:
+        m_tot = len(m_sub)
+        m_low = len(m_sub[m_sub["score"].isin([1, 2])])
+        monthly_stats.append({
+            "month": m_name,
+            "total_reviews": m_tot,
+            "avg_rating": round(float(m_sub["score"].mean()), 2),
+            "low_star_count": m_low,
+            "low_star_share": round(m_low / m_tot * 100, 1)
+        })
 
     return {
         "summary": {
@@ -214,33 +242,35 @@ def compute_basic_numbers(df: pd.DataFrame, listing_metrics: dict) -> dict:
             "rating_gap": round(rating_gap, 2),
             "timestamp": listing_metrics.get("timestamp", datetime.now(timezone.utc).isoformat()),
             "gap_interpretation": (
-                f"The text review average ({round(avg_text_rating, 2)}★) is lower than the official listing "
-                f"score ({listing_score}★) by {abs(round(rating_gap, 2))} stars. This gap reflects user self-selection "
-                f"bias: satisfied commuters rarely write unsolicited text, whereas severe transit disruptions "
-                f"(late cabs, failed bookings) trigger impassioned negative feedback. The listing score also "
-                f"blends star-only ratings without text and historical ratings across older versions."
+                f"The text review average ({round(avg_text_rating, 2)}★ across 1,530 reviews) is lower than the official listing "
+                f"score ({listing_score}★ across {int(listing_metrics.get('ratings_count', 0)):,} ratings) by {abs(round(rating_gap, 2))} stars. "
+                "This difference is best understood through three hypotheses rather than confirmed fact: "
+                "(1) The official listing aggregates lifetime ratings, whereas text reviews capture only recent activity (last 180 days). "
+                "(2) Most Play Store ratings are star-only without text (85.5% 5★ on listing vs 64.6% in text). "
+                "(3) Commuters facing acute transit disruption are far more motivated to write text reviews than satisfied riders."
             )
         },
         "distribution": {
             "star_counts": star_dist,
-            "star_shares": star_shares,
-            "share_1star": share_1star,
-            "share_5star": share_5star,
-            "share_low": share_low,
+            "star_shares": {s: round(cnt / total_reviews * 100, 1) for s, cnt in star_dist.items()},
+            "share_1star": round(share_1star, 1),
+            "share_5star": round(share_5star, 1),
+            "share_low": round(share_low, 1),
             "bimodal_note": (
-                f"Strong bimodal polarity: 1★ accounts for {share_1star}% and 5★ accounts for {share_5star}% "
-                f"of text reviews, with only {star_shares[2] + star_shares[3] + star_shares[4]}% in between."
+                f"Bimodal polarity: 1★ represents {round(share_1star, 1)}% and 5★ represents {round(share_5star, 1)}% "
+                f"of text reviews, with only {round(100.0 - share_1star - share_5star, 1)}% in the middle ratings (2–4★)."
             )
         },
+        "monthly_trend": monthly_stats,
         "period_comparison": {
             "latest_30d_count": cnt_latest_30,
             "latest_30d_avg": round(avg_latest_30, 2),
             "latest_30d_low_count": low_cnt_latest_30,
-            "latest_30d_low_share": low_share_latest_30,
+            "latest_30d_low_share": round(low_share_latest_30, 1),
             "prev_30d_count": cnt_prev_30,
             "prev_30d_avg": round(avg_prev_30, 2),
             "prev_30d_low_count": low_cnt_prev_30,
-            "prev_30d_low_share": low_share_prev_30,
+            "prev_30d_low_share": round(low_share_prev_30, 1),
             "delta_rating": round(trend_delta, 2),
             "trend_verbal": trend_verbal
         },

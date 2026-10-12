@@ -1,40 +1,120 @@
 Issue Key,Summary,Issue Type,Priority,Component,Estimated Effort,Owner,Description,Acceptance Criteria,Metrics to Measure,Status
-MIS-001,Fix Safety Complaints (operations_fleet),Story,Highest,operations_fleet,Large,Head of Safety & Compliance + Mobile Security Lead,"Hypothesis: Night-time cab drops or female employee commutes encounter unverified driver substitutions, escort guard absenteeism, or SOS button unresponsive states.
+MIS-001,"SOS reachable in one tap, no blocking pop-ups on the trip screen (safety escalation)",Task,Highest,app_technical,Small,Android lead,"Affected Flow: Active Trip screen and Emergency SOS trigger
+
+Hypotheses:
+App dialog manager renders non-dismissible modal notifications over the active trip view, overlaying and blocking the touch target of the SOS floating action button.
+Notification stack fails to respect emergency view hierarchy z-indexing during ride state transitions.
 
 Proposed Change:
-Zero-tolerance safety workflow: Enforce driver facial verification before trip start, mandatory OTP verification before car rolls, 1-tap SOS that immediately rings transport security room, and auto-call female employees after drop.
+Enforce top-level z-index window for SOS button that bypasses any in-app notification overlays. Implement persistent 1-tap SOS in system notification bar during active rides.
 
 First 14 Days:
-Immediate Day 1: Audit all reviews flagged with safety. Days 2-5: Review 24/7 security control room call routing. Days 6-14: Implement persistent lock-screen SOS widget.","1. Driver selfie match required every 12 hours or before shift.
-2. SOS button in persistent notification bar accessible even on lock screen.
-3. Drop confirmation auto-call triggers for female night shifts.","SOS response SLA (< 30 seconds), zero unresolved safety escalations.",Proposed
-MIS-002,Fix Generic Complaint With No Detail (unclear),Story,High,unclear,Medium,Unclear Lead,"Hypothesis: Systemic friction in Generic Complaint With No Detail driven by lack of feedback loops.
+Days 1–3: Inspect WindowManager and DialogFragment hierarchy on trip activity. Days 4–8: Refactor SOS to persistent non-blocking overlay. Days 9–14: Test on multiple Android OEM overlays and ship hotfix.","1. SOS button is tap-responsive within 500ms under any active modal or notification state.
+2. In-app popups cannot obscure the emergency action container.
+3. Verified in automated Espresso UI tests.",Zero blocked SOS events; 100% successful trigger within 1 tap under stress testing.,Proposed
+MIS-002,Fix app not opening or getting stuck after updates; reproduce upgrade path; staged rollout gate,Story,High,app_technical,Medium,Android lead + QA,"Affected Flow: App Cold Launch & Post-Upgrade SQLite/SharedPrefs Migration
+
+Hypotheses:
+Room/SQLite schema migration failure on upgrade causes unhandled SQLiteConstraintException or IllegalStateException during Application.onCreate().
+Cached authentication tokens or Room database corrupted on delta APK upgrade, forcing users to uninstall and reinstall to wipe app data.
+Android 14/15/16 background initialization changes causing ANR on modern Pixel/OnePlus devices.
 
 Proposed Change:
-Refactor user journey for Generic Complaint With No Detail with clear UX feedback and robust backend retry.
+Wrap local database upgrade migrations with automated fallback recovery (repair cache rather than crash). Set up CI upgrade tests (v12.14 -> v12.18 -> v12.19). Enforce staged rollout gates (freeze if crash-free sessions drop below 99.5%).
 
 First 14 Days:
-Audit telemetry, formulate test fix, and roll out canary release.",Resolve root cause of Generic Complaint With No Detail complaints with verifiable regression tests.,Reduction in Generic Complaint With No Detail complaints.,Proposed
-MIS-003,Fix Crashes And Slowness (app_technical),Story,High,app_technical,Medium,App Technical Lead,"Hypothesis: Systemic friction in Crashes And Slowness driven by lack of feedback loops.
+Days 1–4: Reproduce upgrade path in QA emulator matrix; analyze Crashlytics launch exceptions. Days 5–9: Fix Room schema migration and corrupted state handler. Days 10–14: Staged rollout (5% -> 20% -> 100%) with automated ANR/crash halt.","1. 100% of schema migration test matrices pass in automated CI across 5 prior versions.
+2. Crash-free user rate >= 99.5% on canary 5% rollout.
+3. Automatic database corruption recovery clears bad cache without crashing.",Crash-free user rate (target: >= 99.5%); reduction in update-related review complaints.,Proposed
+MIS-003,Fix logout loop and OTP delivery; add resend and a 'your company has not added you' message,Task,High,app_technical,Small,Backend/auth lead,"Affected Flow: Authentication, Session Renewal, and Employee Account Onboarding
+
+Hypotheses:
+Session refresh token expires prematurely or encounters 401 on background sync, causing silent logout back to welcome screen.
+SMS gateway carrier routing failures or DND throttling drop OTP delivery without client fallback.
+Unregistered enterprise employees attempt login before their corporate HR roster has imported their phone number, resulting in generic 'OTP failed' instead of clear explanation.
 
 Proposed Change:
-Refactor user journey for Crashes And Slowness with clear UX feedback and robust backend retry.
+Graceful session refresh with silent token renewal. Add multi-channel OTP resend (SMS, WhatsApp, Email). If user number is not in enterprise roster, display explicit guidance: 'Your mobile number is not yet registered by your company HR transport team'.
 
 First 14 Days:
-Audit telemetry, formulate test fix, and roll out canary release.",Resolve root cause of Crashes And Slowness complaints with verifiable regression tests.,Reduction in Crashes And Slowness complaints.,Proposed
-MIS-004,Fix Login And Otp (app_technical),Task,Medium,app_technical,Small,Authentication & Security Lead,"Hypothesis: SMS gateway throttling or corporate email spam filters cause delayed OTP delivery exceeding the 60-second in-app timeout, locking out employees before shifts.
+Days 1–3: Inspect auth service token TTL and 401 interception logic. Days 4–8: Implement WhatsApp/Email OTP fallback and explicit unrostered error messaging. Days 9–14: QA test and deploy to production auth service.","1. Multi-channel OTP fallback button appears within 30s.
+2. Clear error banner for unrostered numbers explaining HR dependency.
+3. Session token auto-renews without logging user out during active shifts.",First-attempt login success rate (proposed target; baseline unknown); drop in OTP-related 1-star reviews.,Proposed
+MIS-004,One-tap boarding OTP; stop repeated rating prompts after every ride (verify in-app vs Play prompt),Task,High,app_technical,Small,Product + Android,"Affected Flow: Cab Boarding Verification and Post-Trip Completion
+
+Hypotheses:
+Extra safety modal popup (seat belt acknowledgement) was placed before OTP display, adding friction during boarding under rain or hurry.
+Trip rating modal blocks subsequent app usage with no 'Skip' option, causing commuters to retaliate on the Play Store. (Note: ambiguous whether in-app trip rating or Play Store prompt; verify in app implementation).
 
 Proposed Change:
-Introduce multi-channel fallback: WhatsApp OTP and corporate email OTP backup if SMS is not received in 30 seconds; implement auto-reading OTP via SMS Retriever API.
+Display boarding OTP immediately in 1 tap on the main card; make seat belt confirmation non-blocking or inline. Add a clear 'Skip' button to in-app ride ratings; never block app booking or navigation for feedback.
 
 First 14 Days:
-Days 1-3: Review SMS provider delivery SLAs and failure codes. Days 4-8: Integrate WhatsApp Business OTP fallback endpoint. Days 9-14: Deploy client-side SMS retriever integration.","1. Multi-channel OTP option (WhatsApp / Email) appears automatically after 30s.
-2. SMS Retriever API auto-populates OTP without manual copy-paste.
-3. Clear troubleshooting guide linked directly on login screen.","Login success rate on first attempt (target: > 95%), login complaint share in reviews (target: -75%).",Proposed
-MIS-005,Fix Feature Request Or Usability (app_technical),Task,Medium,app_technical,Small,App Technical Lead,"Hypothesis: Systemic friction in Feature Request Or Usability driven by lack of feedback loops.
+Days 1–3: Remove blocking modal on OTP view. Days 4–7: Add dismiss button to post-trip rating. Days 8–14: Release in v12.20.0.","1. Boarding OTP is visible within 1 tap from active trip card.
+2. In-app trip rating dialog has a dismissible 'Skip' button and never blocks app navigation.
+3. Verify whether complaints reference in-app trip rating or Play prompt.",Reduction in prompt-frustration 1-star reviews; boarding OTP view latency.,Proposed
+MIS-005,"Reply to 1-2 star reviews within 24h, human-approved, never automatic",Task,High,operations_fleet,Small,Support lead,"Affected Flow: Google Play Console Developer Response Workflow
+
+Hypotheses:
+Lack of Play Console integration into customer support ticketing system leads to 0.71% reply rate (only 3 of 422 low-star reviews received developer responses).
+Unacknowledged commuters assume company does not care about reported commute failures.
 
 Proposed Change:
-Refactor user journey for Feature Request Or Usability with clear UX feedback and robust backend retry.
+Connect Play Console API to support ticketing (Zendesk/Freshdesk). Institute a human-in-the-loop 24-hour response SLA on all 1–2★ reviews. Replies must be human-approved with specific ticket IDs, never canned automated bots.
 
 First 14 Days:
-Audit telemetry, formulate test fix, and roll out canary release.",Resolve root cause of Feature Request Or Usability complaints with verifiable regression tests.,Reduction in Feature Request Or Usability complaints.,Proposed
+Days 1–4: Integrate Play Console review webhooks into support queue. Days 5–8: Define human response templates and escalation playbooks. Days 9–14: Train team and launch 24h SLA.","1. Low-star developer reply rate raised from 0.7% to > 90% (proposed target; baseline unknown).
+2. Median response latency < 24 hours.
+3. No automated bot replies posted.",Developer reply rate on 1–2★ reviews; updated review star lift.,Proposed
+MIS-006,Tracking/ETA reliability and delay alerts,Story,Medium,app_technical,Medium,Tracking backend + Android,"Affected Flow: Real-time Vehicle Tracking and Live Map View
+
+Hypotheses:
+Driver app background location throttle causes jumpy cab icons and sudden arrivals.
+ETA calculation lacks real-time traffic delay push alerts when cab is delayed.
+
+Proposed Change:
+Upgrade driver app location foreground service; add client dead-reckoning; push delay alerts if ETA slips by > 5 minutes.
+
+First 14 Days:
+Days 1–5: Measure driver GPS dropouts. Days 6–10: Add push delay notification service. Days 11–14: Beta test on selected fleet routes.","1. Vehicle location update interval <= 10s during active trips.
+2. Proactive push notification sent within 60s if vehicle is delayed >= 5m.
+3. Smooth map interpolation instead of teleports.",ETA Mean Absolute Error; reduction in tracking-related 1-star reviews.,Proposed
+MIS-007,Booking failure/wrong date: clearer error reasons,Story,Medium,app_technical,Medium,Booking service owner,"Affected Flow: Shift Commute Roster Selection and Booking Confirmation
+
+Hypotheses:
+Enterprise corporate cutoff policy (e.g. 4-hour advance booking limit) triggers generic failure toasts rather than actionable explanations.
+Shift date boundaries cause timezone mismatch during midnight shift scheduling.
+
+Proposed Change:
+Display company transport cutoff rules clearly on schedule card. Replace generic failures with exact explanations ('Booking closed at 17:00 as per company policy').
+
+First 14 Days:
+Days 1–4: Audit top booking failure codes. Days 5–9: Deploy user-facing error message mapping. Days 10–14: Ship updated booking modal.","1. 100% of booking error messages state explicit policy or technical reason.
+2. Inline indicator shows cutoff deadline for upcoming shifts.
+3. Client-side retry queue on flaky mobile connections.",Booking success conversion rate (proposed target; baseline unknown); booking complaints in reviews.,Proposed
+MIS-008,One-tap 'what went wrong?' reason picker at trip end,Task,Medium,product_ux,Small,Product manager,"Affected Flow: Trip Completion and Post-Commute Feedback
+
+Hypotheses:
+Users venting with single-word 1-star reviews provide zero diagnostic signal for engineering to act on.
+Commuters lack a frictionless 1-tap categorization mechanism inside the app when things go wrong.
+
+Proposed Change:
+Introduce a 1-tap post-trip diagnostic picker ('Cab Late', 'App Glitch', 'Driver Issue', 'Routing') at trip completion. Keep Play Store option visible; never suppress or incentivize ratings.
+
+First 14 Days:
+Days 1–4: Design 1-tap reason chips. Days 5–9: Implement client feedback screen. Days 10–14: Roll out to pilot accounts.","1. Reason chips visible upon selecting 1–3 stars on trip end.
+2. One tap captures issue category without requiring text typing.
+3. No gating or blocking of Play Store rating.",Share of low-star reviews with actionable reasons (aiming to reduce no-reason reviews from 26.1%).,Proposed
+MIS-009,"Route planning, late pickup and driver behaviour: pass evidence to transport operations (not an app fix)",Story,Medium,operations_fleet,Large,Operations lead,"Affected Flow: Fleet Routing, Vendor Driver Onboarding, and Shift Dispatch SLA
+
+Hypotheses:
+Inefficient multi-stop employee clustering generates excessive ride times (60+ minutes for 15km commutes).
+Vendor cab drivers mark early no-shows without attempting phone calls to avoid waiting times.
+
+Proposed Change:
+Export weekly review evidence dossiers to vendor fleet operations teams; enforce vendor SLA penalties for unattempted no-shows; audit dispatch route clustering algorithms.
+
+First 14 Days:
+Days 1–5: Compile fleet vendor feedback report. Days 6–10: Enforce call verification on driver app no-show. Days 11–14: Review route optimization clustering parameters.","1. Weekly review feedback dossier automatically delivered to vendor fleet operations leads.
+2. Mandatory driver phone attempt logged before driver app allows 'No-Show' trigger.
+3. Route circuity index capped at 1.4x direct distance.",Driver-related complaints in reviews; route circuity ratio; vendor SLA breach rates.,Proposed

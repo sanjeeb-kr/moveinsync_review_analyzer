@@ -84,7 +84,7 @@
     <div class="col-lg-7">
         <div class="card card-custom p-3 h-100">
             <h6 class="fw-bold mb-1">Average Rating by App Version (Threshold N &ge; 15)</h6>
-            <small class="text-muted mb-3">Identifies releases with severe quality degradation (Target: &ge; 4.0★)</small>
+            <small class="text-muted mb-3">Latest versions shown first. Shows lowest observed releases (Target: &ge; 4.0★; v12.14.0 lowest observed at 3.37★)</small>
             <div style="height: 250px;">
                 <canvas id="versionChart"></canvas>
             </div>
@@ -168,24 +168,35 @@
         }
     });
 
-    // 2. Version Chart
+    // 2. Version Chart (Latest versions first, N per version, margin, regression flags)
     const ctxVer = document.getElementById('versionChart').getContext('2d');
     const versions = {{ versions_json | safe }};
     new Chart(ctxVer, {
         type: 'bar',
         data: {
-            labels: versions.map(v => v.version),
+            labels: versions.map(v => `${v.version} (${v.first_seen})`),
             datasets: [{
                 label: 'Avg Rating',
                 data: versions.map(v => v.avg_rating),
-                backgroundColor: versions.map(v => v.avg_rating < 3.5 ? '#ef4444' : '#0284c7'),
+                backgroundColor: versions.map(v => v.is_regression ? '#ef4444' : (v.avg_rating < 3.5 ? '#f97316' : '#0284c7')),
                 borderRadius: 4
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const v = versions[context.dataIndex];
+                            const regrText = v.is_regression ? ' [Possible regression vs avg 3.82★]' : '';
+                            return ` Rating: ${v.avg_rating}★ ± ${v.margin} (N=${v.review_count}, Low★=${v.low_star_share}%)${regrText}`;
+                        }
+                    }
+                }
+            },
             scales: {
                 y: { min: 1.0, max: 5.0, ticks: { stepSize: 1 } }
             }

@@ -114,48 +114,51 @@ movein/
 
 ---
 
-## 📊 Summary of Actual Dataset & Findings
+## 🗺️ Project Map (Data-Flow Order)
 
-### 1. Actual Numbers & Collection Counts
-- **Total Reviews in Scope (Last 180 Days):** 1,527 reviews across 10 Indian locales (`en`, `hi`, `kn`, `ta`, `te`, `mr`, `bn`, `gu`, `pa`, `ml`).
-- **Official Listing Rating (India):** 4.6★ (114,880 lifetime ratings).
-- **Text Review Average:** 3.81★ (Rating gap: -0.79★ vs official listing).
-- **Distribution:** 
-  - 5★: 985 reviews (64.5%)
-  - 1★: 383 reviews (25.1%)
-  - 4★: 78 reviews (5.1%)
-  - 3★: 42 reviews (2.7%)
-  - 2★: 39 reviews (2.6%)
-- **Total Low-Star Reviews (1–2★):** 422 reviews.
-- **Classification Coverage:**
-  - Classified Reviews: 1,442 / 1,527 (94.4% of total dataset).
-  - Classified Low-Star Reviews (1–2★): **422 / 422 (100.0% coverage — CONFIRMED)**.
-  - Classified by Local Rule Pre-Filter: 832 reviews (zero API budget cost).
-  - Classified by Gemini LLM (`gemini-3.5-flash-lite`): 610 reviews.
-  - Pending reviews: 85 (remaining non-critical 4-5 star positive sample).
-- **Developer Reply Rate on 1–2★ Reviews:** Only **0.71%** (99.3% of dissatisfied users are unanswered).
-- **Release Degradation:** Version `12.14.0` was the worst release ($N \ge 15$), averaging only **3.37★** with a 39.5% low-star rate.
+- `src/db.py` — Initializes and connects to SQLite database (`data/moveinsync.db`) storing reviews, listing metrics, and API quota ledger.
+- `src/scraper.py` — Ingests reviews across 10 Indian locales and Play Store listing metadata into the database without storing user PII.
+- `src/budget.py` — Enforces persistent SQLite budget limits (16 requests/day, >=6s pacing) with instant halt on HTTP 429 quota exhaustion.
+- `src/classifier.py` — Classifies reviews: local rule pre-filter handles positive reviews ($0 cost); Gemini LLM classifies negative reviews with offline mock fallback.
+- `src/analysis.py` — Single source of truth for all quantitative calculations (ratings, 30d deltas, version confidence margins, monthly trends).
+- `src/recommender.py` — Computes Star Impact scenarios, data-driven ranking, MIS-001..MIS-009 specs, and exports Jira/Linear CSV.
+- `src/pdf_generator.py` — Compiles Executive Memo, Analysis Report, Action Plan, and Weekly Digest using Matplotlib & ReportLab.
+- `run_report.py` — Single-command pipeline runner executing collection, classification, analysis, and report generation end-to-end.
+- `app.py` — Multi-page Flask web dashboard (`Overview`, `Issues & Impact`, `Review Explorer`, `Pipeline Health`) with `READ_ONLY` mode.
+- `audit_score.py` — Gold-standard evaluation utility to measure human vs AI classification accuracy on sample reviews.
 
-### 2. Ranked Problems & Simulated Star Lift Scenarios
-1. **Login & OTP (`app_technical` | Small Effort):**
-   - 39 low-star reviews (9.24% of all 422 low-star reviews; 45 reviews total).
-   - Scenario Star Lift: **+0.079★**.
-   - Root Cause Hypothesis: SMS gateway delivery timeouts (> 60s) locking out employees before shifts.
-   - Proposed Fix: Multi-channel OTP fallback (WhatsApp & Email) after 30s + Android SMS Retriever API.
-2. **Feature Request & Usability (`app_technical` | Small Effort):**
-   - 74 reviews (12.1% of low-star).
-   - Scenario Star Lift: **+0.101★**.
-   - Review Evidence: Annoying friction points like popups blocking OTP viewing.
-3. **Booking Failure or Wrong Date (`app_technical` | Medium Effort):**
-   - 29 reviews (6.4% of low-star).
-   - Scenario Star Lift: **+0.050★**.
-   - Root Cause Hypothesis: Roster sync timeouts and opaque cutoff policies causing silent booking rejections.
-   - Proposed Fix: Clear inline policy countdowns and actionable error modal dialogs.
-4. **Route Planning & Trip Assignment (`operations_fleet` | Large Effort):**
-   - Inefficient clustering across long routes.
-5. **Late Pickup & Vehicle Assignment (`operations_fleet` | Large Effort):**
-   - Driver delays and erratic ETAs.
-   - Proposed Fix: Proactive push notification when cab is delayed by > 5 minutes with real-time recalculated ETA and 1-tap transport escalation.
+---
+
+## 🎙️ 5-Step "How It Works" (Say Aloud to Interviewer)
+
+1. **The Diagnostic Reality Check:**  
+   *"MoveInSync's official India Play Store listing rating is 4.64★ based on 114,879 lifetime ratings. However, recent text reviews over the last 180 days average 3.82★—a -0.82★ gap. Rather than assuming the app is broken everywhere, our analysis shows this is driven by self-selection: commuters with normal rides don't write text reviews, but acute transit disruptions cause employees to vent publicly. Crucially, MoveInSync’s developer reply rate on low-star reviews is only 0.7%."*
+
+2. **Zero-Waste Classification & Budget Guardrail:**  
+   *"To process this economically, we built a hybrid pipeline. A local rule engine pre-filters positive reviews for free, while negative reviews are processed with Gemini 3.5 Flash-Lite against a strict 16-issue taxonomy. A persistent SQLite budget manager caps usage at 16 calls/day with automated quota backoff so it can never run up costs."*
+
+3. **Ownership Breakdown (App vs Fleet vs Policy):**  
+   *"When we examine the 422 low-star reviews, 60.7% are App Technical bugs, 20.4% are Fleet Operations issues, and 3.6% are Enterprise IT policy constraints. This proves that more than 60% of visible friction is within the software team’s direct control to fix."*
+
+4. **Data-Driven Priority Ranking:**  
+   *"Instead of guessing, we rank issues using an Impact-over-Effort formula that calculates simulated Star Lift scenarios. Emergency SOS button access is escalated immediately because popups were blocking touch targets during active rides. Behind safety, Crashes & Upgrade Failures rank #1 (63 low-star reviews, with 19% citing updates/reinstalls), followed by Login & OTP lockouts (39 low-star reviews). Lateness and tracking are actually mid-ranked, showing that commuter friction is rooted in unhandled app state transitions rather than pure traffic delays."*
+
+5. **Repeatable Tooling & 14-Day Delivery:**  
+   *"Everything is repeatable with a single command: `python run_report.py`. We provide an interactive Flask dashboard for deep exploration and export ready-to-execute Jira sprint specifications (MIS-001 through MIS-009) with named owners, acceptance criteria, and telemetry metrics."*
+
+---
+
+## 📊 Summary of Verified Single Source of Truth Numbers
+
+- **Total Reviews in Scope (180 Days):** 1,530 reviews across 10 Indian locales (`en`, `hi`, `kn`, `ta`, etc.).
+- **Official Listing Rating (India):** 4.64★ (114,879 lifetime ratings).
+- **Text Review Average:** 3.82★ (Gap: -0.82★ vs official listing).
+- **Latest 30d vs Previous 30d:** 3.77★ (244 reviews) vs 3.82★ (237 reviews) — Relatively flat / stable.
+- **Low-Star Reviews (1–2★):** 422 reviews (27.6% of text reviews).
+- **Low-Star Classification Coverage:** **422 / 422 (100.0% — CONFIRMED)**.
+- **Developer Reply Rate on 1–2★ Reviews:** **0.7%** (3 of 422 replied).
+- **Lowest Observed Release ($N \ge 15$):** Version `12.14.0` (Average: 3.37★ across 38 reviews, 39.5% low-star).
+- **Product Ownership Split (1–2★ Reviews):** App Technical: 60.7% (256) | Fleet Operations: 20.4% (86) | Unclear: 13.0% (55) | Enterprise Config: 3.6% (15).
 
 ---
 

@@ -38,8 +38,7 @@ def overview():
     if not (REPORTS_DIR / "executive_memo.pdf").exists():
         build_all_reports(analysis_res, recommender_res)
 
-    # Sort by version string using tuple-of-ints key so newer versions always appear.
-    # Include all significant versions (N >= 15 reviews) up to 14 entries.
+    # Sort versions so the newest versions appear first (12.19.0, 12.18.1, 12.17.0...)
     def _version_key(v_str):
         try:
             return tuple(int(x) for x in str(v_str).split("."))
@@ -48,8 +47,9 @@ def overview():
 
     versions_data = sorted(
         [v for v in analysis_res["version_analysis"]["versions"] if v["is_significant"]],
-        key=lambda v: _version_key(v["version"])
-    )[-14:]  # show up to 14 versions, most recent last
+        key=lambda v: _version_key(v["version"]),
+        reverse=True
+    )[:14]  # 3 latest versions first with first-seen dates
     hourly_data = analysis_res["timing_analysis"]["low_by_hour"]
 
     return render_template(
@@ -68,18 +68,38 @@ def overview():
 def issues():
     df, meta, analysis_res, recommender_res = get_base_data()
     
-    # Calculate responsibility and stage breakdown
+    # Calculate responsibility and stage breakdown for LOW-STAR reviews only (1-2★)
     df_classified = df[df["is_classified"] == 1]
-    resp_counts = df_classified["responsibility"].value_counts().to_dict()
-    stage_counts = df_classified["journey_stage"].value_counts().head(8).to_dict()
+    df_low = df_classified[df_classified["score"].isin([1, 2])]
+    total_low = max(1, len(df_low))
+
+    resp_counts = df_low["responsibility"].value_counts().to_dict()
+    # Format labels with low-star percentage share for legend
+    resp_labels = [
+        f"{k.replace('_', ' ').title()} ({round(v / total_low * 100, 1)}%)"
+        for k, v in resp_counts.items()
+    ]
+    resp_chart_payload = {
+        "labels": resp_labels,
+        "counts": list(resp_counts.values())
+    }
+
+    stage_counts = df_low["journey_stage"].value_counts().head(8).to_dict()
+    stage_chart_payload = {
+        "labels": [k.replace('_', ' ').title() for k in stage_counts.keys()],
+        "counts": list(stage_counts.values())
+    }
 
     return render_template(
         "issues.html",
         active_page="issues",
         coverage=recommender_res["coverage"],
+        safety_escalation=recommender_res["safety_escalation"],
+        measurement_gap=recommender_res["measurement_gap"],
         ranked_problems=recommender_res["ranked_problems"],
-        resp_breakdown_json=json.dumps(resp_counts),
-        stage_breakdown_json=json.dumps(stage_counts)
+        rank_score_note=recommender_res.get("rank_score_note", ""),
+        resp_chart_json=json.dumps(resp_chart_payload),
+        stage_chart_json=json.dumps(stage_chart_payload)
     )
 
 @app.route("/explorer")
@@ -196,6 +216,7 @@ def health():
     coverage_dict = dict(recommender_res["coverage"])
     coverage_dict["total_pending"] = total_pending
 
+    read_only = os.environ.get("READ_ONLY", "1").lower() in ("1", "true", "yes")
     msg = request.args.get("msg")
 
     return render_template(
@@ -204,12 +225,17 @@ def health():
         budget=budget_status,
         coverage=coverage_dict,
         action_items=action_items,
+        read_only=read_only,
         message=msg
     )
 
 @app.route("/run_pipeline", methods=["POST"])
 def run_pipeline():
     """Manual batch classification trigger from dashboard."""
+    read_only = os.environ.get("READ_ONLY", "1").lower() in ("1", "true", "yes")
+    if read_only:
+        return redirect(url_for("health", msg="READ-ONLY MODE: Pipeline execution is disabled to preserve Gemini API quota."))
+
     classifier = ReviewClassifier(db_path=DB_PATH)
     result = classifier.run_classification_pipeline()
     df, meta, analysis_res, recommender_res = get_base_data()

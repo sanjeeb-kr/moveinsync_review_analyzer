@@ -62,11 +62,17 @@
         It strictly halts immediately upon budget depletion or provider 429 quota exhaustion.
     </p>
     <div class="d-flex flex-wrap gap-2 align-items-center">
-        <form method="POST" action="/run_pipeline" class="d-inline">
-            <button type="submit" class="btn btn-warning btn-sm fw-bold">
-                <i class="bi bi-play-circle-fill me-1"></i>Run Batch Classification <span class="badge bg-dark ms-1">[Consumes API Budget]</span>
+        {% if read_only %}
+            <button type="button" class="btn btn-secondary btn-sm fw-bold" disabled title="Disabled in Hosted / Read-Only Mode">
+                <i class="bi bi-lock-fill me-1"></i>Run Batch Classification <span class="badge bg-dark ms-1">[Read-Only Mode]</span>
             </button>
-        </form>
+        {% else %}
+            <form method="POST" action="/run_pipeline" class="d-inline">
+                <button type="submit" class="btn btn-warning btn-sm fw-bold">
+                    <i class="bi bi-play-circle-fill me-1"></i>Run Batch Classification <span class="badge bg-dark ms-1">[Consumes API Budget]</span>
+                </button>
+            </form>
+        {% endif %}
 
         <a href="/download/memo" class="btn btn-outline-dark btn-sm">
             <i class="bi bi-file-pdf me-1"></i>Executive Memo PDF
