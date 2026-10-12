@@ -1,0 +1,9 @@
+pandas>=2.0.0
+flask>=3.0.0
+gunicorn>=21.2.0
+google-play-scraper>=1.2.4
+google-genai>=0.1.1
+python-dotenv>=1.0.0
+reportlab>=4.0.0
+matplotlib>=3.8.0
+pytest>=8.0.0

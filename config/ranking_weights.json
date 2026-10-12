@@ -1,0 +1,14 @@
+{
+  "severity_weight": 1.5,
+  "volume_weight": 1.2,
+  "recent_trend_weight": 1.3,
+  "evidence_strength_weight": 1.0,
+  "star_impact_weight": 2.0,
+  "effort_weights": {
+    "small": 1.0,
+    "medium": 2.0,
+    "large": 3.5
+  },
+  "safety_escalation_boost": 100.0,
+  "description": "Rank score = (SeverityScore * VolScore * TrendScore * StarImpactScore) / EffortScore. Safety issues automatically receive safety escalation boost."
+}

@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+
+{% block title %}MoveInSync — Review Explorer{% endblock %}
+
+{% block content %}
+<div class="row align-items-center mb-3">
+    <div class="col-md-8">
+        <h3 class="fw-bold mb-1">Play Store Review Explorer</h3>
+        <p class="text-muted mb-0">Inspect raw text, detected languages, classification labels, and verbatim evidence quotes</p>
+    </div>
+    <div class="col-md-4 text-md-end">
+        <span class="badge bg-secondary py-2 px-3 fs-7">
+            Found {{ total_count }} matching reviews
+        </span>
+    </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="card card-custom p-3 mb-4">
+    <form method="GET" action="/explorer" class="row g-2 align-items-end">
+        <div class="col-md-2 col-6">
+            <label class="form-label small fw-bold text-muted mb-1">Stars</label>
+            <select name="score" class="form-select form-select-sm">
+                <option value="">All Stars</option>
+                <option value="1" {% if current_filters.score == '1' %}selected{% endif %}>1★ Only</option>
+                <option value="2" {% if current_filters.score == '2' %}selected{% endif %}>2★ Only</option>
+                <option value="3" {% if current_filters.score == '3' %}selected{% endif %}>3★ Only</option>
+                <option value="4" {% if current_filters.score == '4' %}selected{% endif %}>4★ Only</option>
+                <option value="5" {% if current_filters.score == '5' %}selected{% endif %}>5★ Only</option>
+                <option value="low" {% if current_filters.score == 'low' %}selected{% endif %}>Low (1–2★)</option>
+            </select>
+        </div>
+
+        <div class="col-md-3 col-6">
+            <label class="form-label small fw-bold text-muted mb-1">Issue</label>
+            <select name="issue" class="form-select form-select-sm">
+                <option value="">All Issues</option>
+                {% for iss in filter_options.issues %}
+                <option value="{{ iss }}" {% if current_filters.issue == iss %}selected{% endif %}>
+                    {{ iss.replace('_', ' ').title() }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-md-2 col-6">
+            <label class="form-label small fw-bold text-muted mb-1">Responsibility</label>
+            <select name="responsibility" class="form-select form-select-sm">
+                <option value="">All Domains</option>
+                {% for resp in filter_options.responsibilities %}
+                <option value="{{ resp }}" {% if current_filters.responsibility == resp %}selected{% endif %}>
+                    {{ resp.replace('_', ' ').title() }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-md-2 col-6">
+            <label class="form-label small fw-bold text-muted mb-1">App Version</label>
+            <select name="version" class="form-select form-select-sm">
+                <option value="">All Versions</option>
+                {% for ver in filter_options.versions %}
+                <option value="{{ ver }}" {% if current_filters.version == ver %}selected{% endif %}>
+                    {{ ver }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-md-2 col-6">
+            <label class="form-label small fw-bold text-muted mb-1">Language</label>
+            <select name="language" class="form-select form-select-sm">
+                <option value="">All Languages</option>
+                {% for lang in filter_options.languages %}
+                <option value="{{ lang }}" {% if current_filters.language == lang %}selected{% endif %}>
+                    {{ lang }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-md-1 col-6">
+            <button type="submit" class="btn btn-primary btn-sm w-100">
+                <i class="bi bi-filter"></i> Apply
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Reviews Table -->
+<div class="card card-custom">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" style="font-size: 0.85rem;">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 80px;">Rating</th>
+                    <th style="width: 100px;">Date & Ver</th>
+                    <th>Original Review Content</th>
+                    <th style="width: 140px;">Issue & Stage</th>
+                    <th style="width: 130px;">Responsibility</th>
+                    <th style="width: 180px;">Verbatim Quote</th>
+                    <th style="width: 80px;">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in reviews %}
+                <tr>
+                    <td>
+                        <span class="badge {% if r.score <= 2 %}badge-low{% elif r.score == 3 %}badge-med{% else %}badge-high{% endif %} px-2 py-1">
+                            {{ r.score }}★
+                        </span>
+                        {% if r.thumbs_up_count > 0 %}
+                            <div class="text-muted" style="font-size: 0.7rem;"><i class="bi bi-hand-thumbs-up"></i> {{ r.thumbs_up_count }}</div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="fw-bold">{{ r.at[:10] }}</div>
+                        <small class="text-muted">{{ r.app_version or 'Unknown' }}</small>
+                        <div class="badge bg-light text-dark border p-0 px-1" style="font-size: 0.65rem;">{{ r.detected_language }}</div>
+                    </td>
+                    <td>
+                        <div class="text-dark">{{ r.content }}</div>
+                        {% if r.reply_content %}
+                            <div class="mt-1 p-1 bg-light rounded text-muted border-start border-2 border-primary" style="font-size: 0.75rem;">
+                                <strong>Developer Reply ({{ r.replied_at[:10] }}):</strong> {{ r.reply_content }}
+                            </div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if r.is_classified %}
+                            <div class="fw-bold text-primary">{{ r.issue.replace('_', ' ').title() }}</div>
+                            <small class="text-muted">{{ r.journey_stage }}</small>
+                            {% if r.safety_flag %}
+                                <div><span class="badge bg-danger" style="font-size: 0.65rem;">SAFETY</span></div>
+                            {% endif %}
+                        {% else %}
+                            <span class="badge bg-secondary">Pending</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if r.is_classified %}
+                            <span class="badge bg-light text-dark border">{{ r.responsibility.replace('_', ' ') }}</span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if r.is_classified and r.evidence_quote %}
+                            <small class="fst-italic text-secondary">"{{ r.evidence_quote }}"</small>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if r.is_classified %}
+                            {% if r.classification_source == 'rule' %}
+                                <span class="badge bg-info text-dark" style="font-size: 0.7rem;">Rule</span>
+                            {% elif r.classification_source == 'llm' %}
+                                <span class="badge bg-success" style="font-size: 0.7rem;">LLM</span>
+                            {% else %}
+                                <span class="badge bg-secondary" style="font-size: 0.7rem;">Mock</span>
+                            {% endif %}
+                            {% if r.is_uncertain %}
+                                <div class="badge bg-warning text-dark mt-1" style="font-size: 0.65rem;">Uncertain</div>
+                            {% endif %}
+                        {% else %}
+                            <span class="badge bg-warning text-dark" style="font-size: 0.7rem;">Pending</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="text-center py-4 text-muted">
+                        No reviews matched the current filter criteria.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div class="card-footer bg-white d-flex justify-content-between align-items-center py-3">
+        <small class="text-muted">Showing page {{ current_page }} of {{ total_pages }}</small>
+        <nav>
+            <ul class="pagination pagination-sm mb-0">
+                {% if current_page > 1 %}
+                <li class="page-item"><a class="page-link" href="{{ page_url_prefix }}&page={{ current_page - 1 }}">Previous</a></li>
+                {% endif %}
+                <li class="page-item active"><span class="page-link">{{ current_page }}</span></li>
+                {% if current_page < total_pages %}
+                <li class="page-item"><a class="page-link" href="{{ page_url_prefix }}&page={{ current_page + 1 }}">Next</a></li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

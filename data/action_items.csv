@@ -1,0 +1,40 @@
+Issue Key,Summary,Issue Type,Priority,Component,Estimated Effort,Owner,Description,Acceptance Criteria,Metrics to Measure,Status
+MIS-001,Fix Safety Complaints (operations_fleet),Story,Highest,operations_fleet,Large,Head of Safety & Compliance + Mobile Security Lead,"Hypothesis: Night-time cab drops or female employee commutes encounter unverified driver substitutions, escort guard absenteeism, or SOS button unresponsive states.
+
+Proposed Change:
+Zero-tolerance safety workflow: Enforce driver facial verification before trip start, mandatory OTP verification before car rolls, 1-tap SOS that immediately rings transport security room, and auto-call female employees after drop.
+
+First 14 Days:
+Immediate Day 1: Audit all reviews flagged with safety. Days 2-5: Review 24/7 security control room call routing. Days 6-14: Implement persistent lock-screen SOS widget.","1. Driver selfie match required every 12 hours or before shift.
+2. SOS button in persistent notification bar accessible even on lock screen.
+3. Drop confirmation auto-call triggers for female night shifts.","SOS response SLA (< 30 seconds), zero unresolved safety escalations.",Proposed
+MIS-002,Fix Generic Complaint With No Detail (unclear),Story,High,unclear,Medium,Unclear Lead,"Hypothesis: Systemic friction in Generic Complaint With No Detail driven by lack of feedback loops.
+
+Proposed Change:
+Refactor user journey for Generic Complaint With No Detail with clear UX feedback and robust backend retry.
+
+First 14 Days:
+Audit telemetry, formulate test fix, and roll out canary release.",Resolve root cause of Generic Complaint With No Detail complaints with verifiable regression tests.,Reduction in Generic Complaint With No Detail complaints.,Proposed
+MIS-003,Fix Crashes And Slowness (app_technical),Story,High,app_technical,Medium,App Technical Lead,"Hypothesis: Systemic friction in Crashes And Slowness driven by lack of feedback loops.
+
+Proposed Change:
+Refactor user journey for Crashes And Slowness with clear UX feedback and robust backend retry.
+
+First 14 Days:
+Audit telemetry, formulate test fix, and roll out canary release.",Resolve root cause of Crashes And Slowness complaints with verifiable regression tests.,Reduction in Crashes And Slowness complaints.,Proposed
+MIS-004,Fix Login And Otp (app_technical),Task,Medium,app_technical,Small,Authentication & Security Lead,"Hypothesis: SMS gateway throttling or corporate email spam filters cause delayed OTP delivery exceeding the 60-second in-app timeout, locking out employees before shifts.
+
+Proposed Change:
+Introduce multi-channel fallback: WhatsApp OTP and corporate email OTP backup if SMS is not received in 30 seconds; implement auto-reading OTP via SMS Retriever API.
+
+First 14 Days:
+Days 1-3: Review SMS provider delivery SLAs and failure codes. Days 4-8: Integrate WhatsApp Business OTP fallback endpoint. Days 9-14: Deploy client-side SMS retriever integration.","1. Multi-channel OTP option (WhatsApp / Email) appears automatically after 30s.
+2. SMS Retriever API auto-populates OTP without manual copy-paste.
+3. Clear troubleshooting guide linked directly on login screen.","Login success rate on first attempt (target: > 95%), login complaint share in reviews (target: -75%).",Proposed
+MIS-005,Fix Feature Request Or Usability (app_technical),Task,Medium,app_technical,Small,App Technical Lead,"Hypothesis: Systemic friction in Feature Request Or Usability driven by lack of feedback loops.
+
+Proposed Change:
+Refactor user journey for Feature Request Or Usability with clear UX feedback and robust backend retry.
+
+First 14 Days:
+Audit telemetry, formulate test fix, and roll out canary release.",Resolve root cause of Feature Request Or Usability complaints with verifiable regression tests.,Reduction in Feature Request Or Usability complaints.,Proposed

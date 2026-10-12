@@ -1,0 +1,19 @@
+# Virtual environment
+.venv/
+venv/
+ENV/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pytest_cache/
+
+# Local configuration & secrets (never commit API keys!)
+.env
+*.local
+
+# OS and log files
+*.log
+.DS_Store
+Thumbs.db
